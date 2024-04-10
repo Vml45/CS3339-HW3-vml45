@@ -1,0 +1,84 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <cmath>
+
+struct CacheEntry {
+    bool valid;
+    unsigned int tag;
+    CacheEntry() : valid(false), tag(0) {}
+};
+
+class CacheSimulator {
+private:
+    std::vector<CacheEntry> cache;
+    unsigned int numEntries;
+    unsigned int numSets;
+    unsigned int setIndexMask;
+    unsigned int setIndexShift;
+
+public:
+    CacheSimulator(unsigned int numEntries, unsigned int associativity) {
+        this->numEntries = numEntries;
+        this->numSets = numEntries / associativity;
+        this->cache.resize(this->numSets);
+        // Calculate mask and shift for extracting set index assuming block size of 1 word
+        this->setIndexMask = this->numSets - 1;
+        this->setIndexShift = static_cast<unsigned int>(log2(1)); // log2(block size)
+    }
+
+    unsigned int getSetIndex(unsigned int address) {
+        return (address >> this->setIndexShift) & this->setIndexMask;
+    }
+
+    unsigned int getTag(unsigned int address) {
+        return address >> (this->setIndexShift + static_cast<unsigned int>(log2(this->numSets)));
+    }
+
+    bool access(unsigned int address) {
+        unsigned int setIndex = this->getSetIndex(address);
+        unsigned int tag = this->getTag(address);
+        CacheEntry& entry = this->cache[setIndex];
+
+        if (entry.valid && entry.tag == tag) {
+            // Hit
+            return true;
+        } else {
+            // Miss and update cache
+            entry.valid = true;
+            entry.tag = tag;
+            return false;
+        }
+    }
+};
+
+int main(int argc, char *argv[]) {
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " <num_entries> <associativity> <memory_reference_file>" << std::endl;
+        return 1;
+    }
+
+    unsigned int numEntries = std::stoi(argv[1]);
+    unsigned int associativity = std::stoi(argv[2]);
+    std::string memoryReferenceFile = argv[3];
+
+    CacheSimulator simulator(numEntries, associativity);
+
+    std::ifstream inFile(memoryReferenceFile);
+    std::ofstream outFile("cache_sim_output");
+    if (!inFile.is_open() || !outFile.is_open()) {
+        std::cerr << "Error opening file(s)." << std::endl;
+        return 1;
+    }
+
+    unsigned int address;
+    while (inFile >> address) {
+        bool hit = simulator.access(address);
+        outFile << address << " : " << (hit ? "HIT" : "MISS") << std::endl;
+    }
+
+    inFile.close();
+    outFile.close();
+
+    return 0;
+}
